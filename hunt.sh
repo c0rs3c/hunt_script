@@ -81,10 +81,9 @@ On_IWhite='\033[0;107m'   # White
 # working_dir=$(pwd)
 # echo $working_dir
 
+mkdir Configs
 
-#Reliable resolvers from google , cloudflare, cisco and quad9
-# mkdir Configs
-# echo -e "8.8.8.8\n1.1.1.1\n8.8.4.4\n1.0.0.1\n208.67.222.222\n9.9.9.9" > Configs/reliable-resolvers.txt
+
 
 ## Generate Crontab script for subdomain enumeration and then set crontab job
 set_up_slack_notifier_cron(){
@@ -180,37 +179,54 @@ enum_subdomains() {
 
 
 resolve_subdomains(){
-    echo -e "\n${Red}**************************************Resolving Probable Subdomains Started**********************************${NC}"
+    if [ -f live-subdomains.txt ];then rm live-subdomains.txt;fi
+    if [ -f live-subdomains.txt.tmp ];then rm live-subdomains.txt.tmp;fi
+    if [ -f live-subdomains.txt.tmp.1 ];then rm live-subdomains.txt.tmp.1;fi
+    echo -e "\n${Yellow}**************************************Resolving Probable Subdomains Started**********************************${NC}"
     if [[ -f "./Configs/resolvers.txt" ]]
     then
         echo "Resolver exists"
     else
-        timeout 60 dnsvalidator -tL https://public-dns.info/nameservers.txt -threads 20 -o Configs/resolvers.txt
+        timeout 20 dnsvalidator -tL https://public-dns.info/nameservers.txt -threads 20 -o Configs/resolvers.txt
     fi
+    #Reliable resolvers from google , cloudflare, cisco and quad9
+    echo -e "8.8.8.8\n1.1.1.1\n8.8.4.4\n1.0.0.1\n208.67.222.222\n9.9.9.9" > Configs/reliable-resolvers.txt
+    echo -e "8.8.8.8\n1.1.1.1\n8.8.4.4\n1.0.0.1\n208.67.222.222\n9.9.9.9" >> Configs/resolvers.txt
     # echo $resolvers
     # shuffledns -d $domain -list probable-subdomains.txt -r Configs/resolvers.txt -t 15000 -o live-subdomains.txt
     massdns -r Configs/resolvers.txt -o S -w live-subdomains.txt.tmp  probable-subdomains.txt
     cat live-subdomains.txt.tmp | cut -d " " -f1 | sed "s/\.$//" | sort -u | tee live-subdomains.txt.tmp.1
     massdns -r Configs/reliable-resolvers.txt -o S -w live-subdomains.txt live-subdomains.txt.tmp.1
-    cat live-subdomains.txt
-    echo -e "\n${Red}**************************************Resolving Probable Subdomains Finished**********************************${NC}"
+    rm live-subdomains.txt.tmp live-subdomains.txt.tmp.1
+    # cat live-subdomains.txt
+    echo -e "\n${Green}**************************************Resolving Probable Subdomains Finished**********************************${NC}"
 }
+
 brute_alt_subdomains(){
-    echo -e "\n${Red}**************************************Alterd Domain Bruteforcing and Resolving Started**********************************${NC}"
-    if [[ -f "./alt-dns-words.txt" ]]
+    echo -e "\n${Yellow}**************************************Alterd Domain Bruteforcing and Resolving Started**********************************${NC}"
+    if [ -f altered-live-subdomains.txt ];then rm altered-live-subdomains.txt;fi
+    if [ -f alt-dns-words.txt ]
     then
         echo "Alt Word List exists"
     else
         wget https://raw.githubusercontent.com/infosec-au/altdns/master/words.txt -O alt-dns-words.txt
     fi
-    echo -e "${Red}Generating Permutation of altered domains${NC}"
+    echo -e "${Yellow}Generating Permutation of altered domains${NC}"
     altdns -i live-subdomains.txt -o altered-dns-output.txt -w alt-dns-words.txt
-    echo -e "${Red} Resolving Altered Domains${NC}"
+    alt_count=$(wc -l altered-dns-output.txt | cut -d " " -f1)
+    printf "${Yellow} Total altered domains generated : %s\n${NC}" $alt_count
+    echo -e "${Yellow} Resolving Altered Domains${NC}"
     # shuffledns -d $domain -list altered-dns-output.txt -r Configs/resolvers.txt -t 15000 -o altered-live-subdomains.txt
     massdns -r Configs/resolvers.txt -o S -w altered-live-subdomains.txt.tmp -t A altered-dns-output.txt
     cat altered-live-subdomains.txt.tmp | cut -d " " -f1 | sed "s/\.$//" | sort -u | tee altered-live-subdomains.txt.tmp.1
     massdns -r Configs/reliable-resolvers.txt -o S -w altered-live-subdomains.txt -t A altered-live-subdomains.txt.tmp.1
-    echo -e "\n${Red}**************************************Altered Domain Bruteforcing and Resolving Finished**********************************${NC}"
+    if [ -f altered-live-subdomains.txt.tmp.1 ];then rm altered-live-subdomains.txt.tmp.1;fi
+    if [ -f altered-live-subdomains.txt.tmp ];then rm altered-live-subdomains.txt.tmp;fi
+    if [ -f altered-dns-output.txt ];then rm altered-dns-output.txt;fi
+    if [ -f alt-dns-words.txt ];then rm alt-dns-words.txt;fi
+    alt_live_count=$(wc -l altered-live-subdomains.txt | cut -d " " -f1)
+    printf "${Yellow} Total altered live domains Found : %s\n${NC}" $alt_live_count
+    echo -e "\n${Green}**************************************Altered Domain Bruteforcing and Resolving Finished**********************************${NC}"
 }
 
 get_CNAME(){
@@ -391,13 +407,14 @@ hunt_for_xss(){
 single_domain(){
     echo "Single Domain Called"
     # generate_github_dorks
-    enum_subdomains
-    # resolve_subdomains
-    # brute_alt_subdomains
-    # cat altered-live-subdomains.txt | anew live-subdomains.txt | tee permuted-live-subdomains
-    # mv live-subdomains.txt subdomains-with-ip.txt
-    # cat subdomains-with-ip.txt | cut -d " " -f1 | sed "s/\.$//" | tee subdomains.txt
-    # rm altered-live-subdomains.txt alt-dns-words.txt altered-dns-output.txt altered-live-subdomains.txt.tmp altered-live-subdomains.txt.tmp.1 live-subdomains.txt.tmp live-subdomains.txt.tmp.1 probable-subdomains.txt Configs/reliable-resolvers.txt
+    # enum_subdomains
+    resolve_subdomains
+    brute_alt_subdomains
+    cat altered-live-subdomains.txt | anew live-subdomains.txt | tee permuted-live-subdomains
+    mv live-subdomains.txt subdomains-with-ip.txt
+    cat subdomains-with-ip.txt | cut -d " " -f1 | sed "s/\.$//" | tee subdomains.txt
+    rm altered-live-subdomains.txt
+    # rm probable-subdomains.txt Configs/reliable-resolvers.txt
     # cat subdomains.txt | httprobe | sort -u | tee webdomains.txt
     # fetch_subdomains_and_find_secrets_through_meg
     # get_CNAME
