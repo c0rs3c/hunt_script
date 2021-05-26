@@ -76,7 +76,7 @@ On_IWhite='\033[0;107m'   # White
 # fi
 # if [[ -z "$2" ]]; then
 # 	echo -e "[$Red-$NC] If in-scope-regex not provided as second argument, XSS hunting shall not happen>"
-# fi    
+# fi
 # domain=$1
 # working_dir=$(pwd)
 # echo $working_dir
@@ -117,7 +117,7 @@ fi
 EOL
 chmod 777 Slack-subdomain-notifier/$domain"-slack-sd-notifier.sh"
 echo "PATH=$PATH"
-(crontab -l 2>/dev/null; echo "5 4 * * * $(pwd)/Slack-subdomain-notifier/$domain"-slack-sd-notifier.sh"") | crontab - 
+(crontab -l 2>/dev/null; echo "5 4 * * * $(pwd)/Slack-subdomain-notifier/$domain"-slack-sd-notifier.sh"") | crontab -
 }
 
 
@@ -133,30 +133,52 @@ generate_github_dorks(){
 enum_subdomains() {
     echo -e "\n${Red}**************************************Subdomain Enumeration for Probable Subdomains Started**********************************${NC}"
     echo -e "${Red}Starting RECON ${NC}"
+    echo -e "${Green}Using ASSETFINDER${NC}"
     assetfinder --subs-only $domain | tee assetfinder.txt
-    # amass enum -d $domain --passive -o amass.txt
-    # findomain --target $domain --threads 50 -u findomains.txt
-    # subfinder -d $domain -t 100 -o subfinder.txt
-    # github-subdomains -t ~/.config/github/github-tokens.txt -d $domain -o git-subdomains.txt
-    # curl -s https://crt.sh/\?q\=\%.$domain\&output\=json | jq -r '.[].name_value' | sed 's/\*\.//g' | tee crtsh.txt
-    echo -e "${Red}Combining all subdomains from tools ${NC}"
-    cat assetfinder.txt amass.txt findomains.txt subfinder.txt crtsh.txt git-subdomains.txt | sort -u  | tee probable-subdomains.txt
-    rm assetfinder.txt amass.txt findomains.txt subfinder.txt crtsh.txt git-subdomains.txt
+    echo -e "${Green}Using AMASS${NC}"
+    amass enum -d $domain --passive -o amass.txt
+    echo -e "${Green}Using FINDDOMAIN${NC}"
+    findomain --target $domain --threads 50 -u findomains.txt
+    echo -e "${Green}Using SUBFINDER${NC}"
+    subfinder -d $domain -t 100 -o subfinder.txt
+    if [ -f ~/.config/github/github-tokens.txt ];then
+        echo -e "${Green}Using GITHUB-SUBDOMAINS${NC}"
+        github-subdomains -t ~/.config/github/github-tokens.txt -d $domain -o git-subdomains.txt
+    else
+        echo -e "${Red}Github Token Not Set at ~/.config/github/github-tokens.txt : Hence skipping github subdomain enumeration${NC}"
+    fi
+    echo -e "${Green}Using CRTSH${NC}"
+    curl -s https://crt.sh/\?q\=\%.$domain\&output\=json | jq -r '.[].name_value' | sed 's/\*\.//g' | tee crtsh.txt
+    echo -e "${Green}Combining all subdomains from tools ${NC}"
+    if [ -f probable-subdomains.txt.tmp ];then rm probable-subdomains.txt.tmp;fi
+    if [ -f probable-subdomains.txt ];then rm probable-subdomains.txt;fi
+    if [ -f assetfinder.txt ];then count=$(wc -l assetfinder.txt | cut -d " " -f1);printf "${Yellow}Assetfinder Domains: %s\n${NC}" $count;cat assetfinder.txt >> probable-subdomains.txt.tmp;rm assetfinder.txt;fi
+    if [ -f amass.txt ];then count=$(wc -l amass.txt | cut -d " " -f1);printf "${Yellow}Amass Domains: %s\n${NC}" $count;cat amass.txt >> probable-subdomains.txt.tmp;rm amass.txt;fi
+    if [ -f findomains.txt ];then count=$(wc -l findomains.txt | cut -d " " -f1);printf "${Yellow}Findomains Domains: %s\n${NC}" $count;cat findomains.txt >> probable-subdomains.txt.tmp;rm findomains.txt;fi
+    if [ -f subfinder.txt ];then count=$(wc -l subfinder.txt | cut -d " " -f1);printf "${Yellow}Subfinder Domains: %s\n${NC}" $count;cat subfinder.txt >> probable-subdomains.txt.tmp;rm subfinder.txt;fi
+    if [ -f crtsh.txt ];then count=$(wc -l crtsh.txt | cut -d " " -f1);printf "${Yellow}crtsh Domains: %s\n${NC}" $count;cat crtsh.txt >> probable-subdomains.txt.tmp;rm crtsh.txt;fi
+    if [ -f git-subdomains.txt ];then count=$(wc -l git-subdomains.txt | cut -d " " -f1);printf "${Yellow}Git-subdomains Domains: %s\n${NC}" $count;cat git-subdomains.txt >> probable-subdomains.txt.tmp;rm git-subdomains.txt;fi
+    cat probable-subdomains.txt.tmp | sort -u > probable-subdomains.txt;rm probable-subdomains.txt.tmp
     # echo -e "\n${Red}*****************************Setting Cron for Subdomain*******************************************${NC}"
     #Copying Probable Subdomains to another file for subdomain-slack notification
     # mkdir Slack-subdomain-notifier
     # cp probable-subdomains.txt Slack-subdomain-notifier/base-subdomains.txt
     # set_up_slack_notifier_cron
     #############################################################################
-
-    wget https://raw.githubusercontent.com/assetnote/commonspeak2-wordlists/master/subdomains/subdomains.txt -O commonspeak2.txt
-    sed -i '/^$/d' commonspeak2.txt
-    sed -i "s/$/\.$domain/" commonspeak2.txt 
+    if [ ! -f commonspeak2.txt ];then
+        wget https://raw.githubusercontent.com/assetnote/commonspeak2-wordlists/master/subdomains/subdomains.txt -O commonspeak2.txt
+        sed -i '/^$/d' commonspeak2.txt
+    fi
+    sed -i "s/$/\.$domain/" commonspeak2.txt #prepending subdomain name to given domain
+    cs_count=$(wc -l commonspeak2.txt | cut -d " " -f1);printf "${Yellow}commonspeak2 Words: %s\n${NC}" $cs_count
     cat commonspeak2.txt >> probable-subdomains.txt
-    echo -e "${Red}Generated all Domains with CommonSpeak Appended : SUBDOMAINS.TXT${NC}"
-    rm commonspeak2.txt
-    echo -e "\n${Red}**************************************Subdomain Enumeration for Probable Subdomains Finished**********************************${NC}"
+    psd_count=$(wc -l probable-subdomains.txt | cut -d " " -f1)
+    printf "${Green}Generated all Domains with CommonSpeak Appended in SUBDOMAINS.TXT: %s\n${NC}" $psd_count
+    if [ -f commonspeak2.txt ];then rm commonspeak2.txt;fi
+    echo -e "\n${Green}**************************************Subdomain Enumeration for Probable Subdomains Finished**********************************${NC}"
 }
+
+
 resolve_subdomains(){
     echo -e "\n${Red}**************************************Resolving Probable Subdomains Started**********************************${NC}"
     if [[ -f "./Configs/resolvers.txt" ]]
@@ -166,7 +188,7 @@ resolve_subdomains(){
         timeout 60 dnsvalidator -tL https://public-dns.info/nameservers.txt -threads 20 -o Configs/resolvers.txt
     fi
     # echo $resolvers
-    # shuffledns -d $domain -list probable-subdomains.txt -r Configs/resolvers.txt -t 15000 -o live-subdomains.txt 
+    # shuffledns -d $domain -list probable-subdomains.txt -r Configs/resolvers.txt -t 15000 -o live-subdomains.txt
     massdns -r Configs/resolvers.txt -o S -w live-subdomains.txt.tmp  probable-subdomains.txt
     cat live-subdomains.txt.tmp | cut -d " " -f1 | sed "s/\.$//" | sort -u | tee live-subdomains.txt.tmp.1
     massdns -r Configs/reliable-resolvers.txt -o S -w live-subdomains.txt live-subdomains.txt.tmp.1
@@ -184,8 +206,8 @@ brute_alt_subdomains(){
     echo -e "${Red}Generating Permutation of altered domains${NC}"
     altdns -i live-subdomains.txt -o altered-dns-output.txt -w alt-dns-words.txt
     echo -e "${Red} Resolving Altered Domains${NC}"
-    # shuffledns -d $domain -list altered-dns-output.txt -r Configs/resolvers.txt -t 15000 -o altered-live-subdomains.txt 
-    massdns -r Configs/resolvers.txt -o S -w altered-live-subdomains.txt.tmp -t A altered-dns-output.txt 
+    # shuffledns -d $domain -list altered-dns-output.txt -r Configs/resolvers.txt -t 15000 -o altered-live-subdomains.txt
+    massdns -r Configs/resolvers.txt -o S -w altered-live-subdomains.txt.tmp -t A altered-dns-output.txt
     cat altered-live-subdomains.txt.tmp | cut -d " " -f1 | sed "s/\.$//" | sort -u | tee altered-live-subdomains.txt.tmp.1
     massdns -r Configs/reliable-resolvers.txt -o S -w altered-live-subdomains.txt -t A altered-live-subdomains.txt.tmp.1
     echo -e "\n${Red}**************************************Altered Domain Bruteforcing and Resolving Finished**********************************${NC}"
@@ -256,8 +278,8 @@ do_port_scan(){
     echo -e "\n${Red}**************************************All Port and Services Scan Started**********************************${NC}"
     mkdir Port-Scan
     cat subdomains-with-ip.txt | cut -d " " -f3 | grep -E "([0-9]{0,3}\.){3}[0-9]{1,3}" | sort -u | tee Port-Scan/all-ips.txt
-    # Call function to clean IPs by removing cloudflare IPs in it 
-    clean-ips 
+    # Call function to clean IPs by removing cloudflare IPs in it
+    clean-ips
     while read ip; do
           echo -e "\n\n${Green}$ip${NC}"
           mkdir Port-Scan/$ip
@@ -302,7 +324,7 @@ extract_wayback_gau_urls(){
     waybackurls $domain | tee -a Archive/wb-gau-urls.tmp;gau $domain | tee -a Archive/wb-gau-urls.tmp;cat Archive/wb-gau-urls.tmp | sort -u > Archive/wb-gau-urls.txt;
     rm Archive/wb-gau-urls.tmp
 	cat Archive/wb-gau-urls.txt  | sort -u | grep -P "\w+\.js(\?|$)" | httpx -silent -status-code -mc 200 | awk '{print $1}' | sort -u > Archive/jsurls.txt
-	# Fetch Endpoints 
+	# Fetch Endpoints
 	echo -e "[$Green+$NC] Fetching Endpoints from gau JS files"
 	if [[ ! -f "$HOME/tools/LinkFinder/linkfinder.py" ]];
 	then
@@ -368,7 +390,7 @@ hunt_for_xss(){
 # while getopts ":d:D:r" opt; do
 single_domain(){
     echo "Single Domain Called"
-    # generate_github_dorks  
+    # generate_github_dorks
     enum_subdomains
     # resolve_subdomains
     # brute_alt_subdomains
@@ -388,29 +410,29 @@ single_domain(){
     # do_spidering
     # if [[ -z $2 ]];then
     #     hunt_for_xss
-    # fi    
+    # fi
     # do_paramining
 }
 multiple_domain(){
     echo "Multiple Domain Called"
     echo $domain_file
-    while read dom; do 
+    while read dom; do
         echo $dom
-        if [[ $dom =~ \* ]];then
-        domain=$dom     
-        enum_subdomains
-        resolve_subdomains
-        brute_alt_subdomains
-        cat altered-live-subdomains.txt | anew live-subdomains.txt | tee permuted-live-subdomains
-        mv live-subdomains.txt subdomains-with-ip.txt
-        cat subdomains-with-ip.txt | cut -d " " -f1 | sed "s/\.$//" | tee subdomains.txt
-        rm altered-live-subdomains.txt  altered-dns-output.txt altered-live-subdomains.txt.tmp altered-live-subdomains.txt.tmp.1 live-subdomains.txt.tmp live-subdomains.txt.tmp.1 probable-subdomains.txt  #### A few more files like resolvers , alt-wordlist needs to be removed
-        cat subdomains.txt | httprobe | sort -u | tee webdomains.txt
-        else
-        fi
+        # if [[ $dom =~ \* ]];then
+        #     domain=$dom
+        #     enum_subdomains
+        #     resolve_subdomains
+        #     brute_alt_subdomains
+        #     cat altered-live-subdomains.txt | anew live-subdomains.txt | tee permuted-live-subdomains
+        #     mv live-subdomains.txt subdomains-with-ip.txt
+        #     cat subdomains-with-ip.txt | cut -d " " -f1 | sed "s/\.$//" | tee subdomains.txt
+        #     rm altered-live-subdomains.txt  altered-dns-output.txt altered-live-subdomains.txt.tmp altered-live-subdomains.txt.tmp.1 live-subdomains.txt.tmp live-subdomains.txt.tmp.1 probable-subdomains.txt  #### A few more files like resolvers , alt-wordlist needs to be removed
+        #     cat subdomains.txt | httprobe | sort -u | tee webdomains.txt
+        #     else
+        # fi
 
-    done < $domain_file 
-        generate_github_dorks  
+    done < $domain_file
+        generate_github_dorks
         # enum_subdomains
         # resolve_subdomains
         # brute_alt_subdomains
@@ -430,7 +452,7 @@ multiple_domain(){
         # do_spidering
         # if [[ -z $2 ]];then
         #     hunt_for_xss
-        # fi    
+        # fi
         # do_paramining
 }
 while getopts ":d:D:r:" opt; do
