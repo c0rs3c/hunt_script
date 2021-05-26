@@ -1,0 +1,10 @@
+assetfinder : go get -u github.com/tomnomnom/assetfinder
+findomain : https://github.com/Findomain/Findomain/releases/download/4.3.0/findomain-linux;mv finddomain-linux finddomain;chmod +x finddoman;cp finddomain ~/.local/bin
+amass
+subfinder:GO111MODULE=on go get -v github.com/projectdiscovery/subfinder/v2/cmd/subfinder
+github-subdomains : go get -u github.com/gwen001/github-subdomains
+dnsvalidator: https://github.com/vortexau/dnsvalidator.git;cd dnsvalidator;sudo python3 setup.py install
+massdns: git clone https://github.com/blechschmidt/massdns.git;cd massdns;make;cp bin/massdns ~/.local/bin
+altdns: python2 -m pip install py-altdns
+anew: go get -u github.com/tomnomnom/anew
+
