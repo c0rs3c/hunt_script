@@ -292,7 +292,7 @@ get_CNAME(){
 }
 
 clean-ips(){
-cat >> Dir-port-scans/clean-ips.py << EOL
+cat > Dir-port-scans/clean-ips.py << EOL
 import sys
 import requests
 from ipaddress import ip_network, ip_address
@@ -350,22 +350,34 @@ rm Dir-port-scans/clean-ips.py
 }
 do_port_scan(){
     echo -e "\n${Blue}[+] **************************************All Port and Services Scan Started**********************************${NC}"
+    rm -rf Dir-port-scans
     mkdir Dir-port-scans
-    cat subdomains-with-ip.txt | cut -d " " -f3 | grep -E "([0-9]{0,3}\.){3}[0-9]{1,3}" | sort -u | tee Dir-port-scans/all-ips.txt
+    cat Dir-subdomains/subdomains-with-ip.txt | cut -d " " -f3 | grep -E "([0-9]{0,3}\.){3}[0-9]{1,3}" | sort -u | tee Dir-port-scans/all-ips.txt
     # Call function to clean IPs by removing cloudflare IPs in it
     clean-ips
     while read ip; do
-          echo -e "\n\n${Green}[+] $ip${NC}"
+          printf "\n\n${Green}[+] Scanning: %s\n${NC}" $ip
           mkdir Dir-port-scans/$ip
-          masscan $ip -p1-65535 --rate 10000 --wait 20 | tee tmp; grep -Po "(?<=port).*(?=\/)" tmp | sed 's/^ //' | tr '\n' ',' | sed -e 's/,$/\n/' |             xargs -n1 -I {} nmap -Pn -p{} -vvv -oN Dir-port-scans/$ip/services.txt $ip
-          rm tmp
+          # sudo masscan $ip -p1-65535 --rate 100000 --wait 10 > Dir-port-scans/tmp
+          sudo masscan $ip --top-ports 1000 --rate 100000 --wait 5 > Dir-port-scans/tmp
+          if [ $(wc -l Dir-port-scans/tmp | cut -d " " -f1) -eq 0 ]
+          then
+            printf "${Red}[-] No opened ports found on %s\n${NC}" $ip
+          else
+            printf "${Yellow}[+] Opened ports on %s are:\n${NC}" $ip
+            printf ${Yellow};cat Dir-port-scans/tmp;printf ${NC};
+            cat Dir-port-scans/tmp >> Dir-port-scans/open-ports-all-ips
+            grep -Po "(?<=port).*(?=\/)" Dir-port-scans/tmp | sed 's/^ //' | tr '\n' ',' | sed -e 's/,$/\n/' | xargs -I {} nmap -Pn -p{} -vvv -oN Dir-port-scans/$ip/services.txt $ip
+            rm Dir-port-scans/tmp
+          fi
           echo -e "\n----------------------------------------------------------------------\n" >> Dir-port-scans/$ip/services.txt
           # For appending domain names in the service.txt file obtained by nmap
-          grep $ip subdomains-with-ip.txt >> Dir-port-scans/$ip/services.txt
+          grep $ip Dir-subdomains/subdomains-with-ip.txt >> Dir-port-scans/$ip/services.txt
     done < Dir-port-scans/origin-ips.txt
-    # For checking response when direct IP is accessed
-    cat Dir-port-scans/origin-ips.txt | httpx -follow-redirects -status-code -title -web-server -cdn -silent -no-fallback -o Dir-port-scans/direct-ip-access.txt
-    echo -e "\n${Red}[+] **************************************All Port and Services Scanned**********************************${NC}"
+    For checking response when direct IP is accessed
+    #All ips being used instead of origin IPs, because let httpx also detect any CDN
+    cat Dir-port-scans/all-ips.txt | httpx -follow-redirects -status-code -title -web-server -cdn -silent -no-fallback -tech-detect -o Dir-port-scans/direct-ip-access.txt
+    echo -e "\n${Green}[+] **************************************All Port and Services Scanned**********************************${NC}"
 }
 do_dir_bruteforcing(){
     echo -e "\n${Red}[+] **************************************Directory Brute Forcing Started*********************************${NC}"
@@ -465,25 +477,25 @@ hunt_for_xss(){
 single_domain(){
     printf "${Purple}[+] Single Domain Called\n${NC}"
     # generate_github_dorks
-    enum_subdomains
-    resolve_subdomains
-    brute_alt_subdomains
-    printf "${Yellow}[+] Listing altered live domains not present in current found live domains\n${NC}"
-    cat Dir-subdomains/altered-live-subdomains.txt | anew Dir-subdomains/live-subdomains.txt | tee Dir-subdomains/permuted-live-subdomains.txt
+    # enum_subdomains
+    # resolve_subdomains
+    # brute_alt_subdomains
+    # printf "${Yellow}[+] Listing altered live domains not present in current found live domains\n${NC}"
+    # cat Dir-subdomains/altered-live-subdomains.txt | anew Dir-subdomains/live-subdomains.txt | tee Dir-subdomains/permuted-live-subdomains.txt
     count=$(wc -l Dir-subdomains/permuted-live-subdomains.txt | cut -d " " -f1)
     printf "${Yellow}[+] No. of Total altered live domains not present in current found live domains: %s\n${NC}" $count
     # if [ -f Dir-subdomains/permuted-live-subdomains.txt ]; then rm Dir-subdomains/permuted-live-subdomains.txt;fi
     # echo -e "\n"
-    mv Dir-subdomains/live-subdomains.txt Dir-subdomains/subdomains-with-ip.txt
-    cat Dir-subdomains/subdomains-with-ip.txt | cut -d " " -f1 | sed "s/\.$//" | sort -u | tee Dir-subdomains/subdomains.txt
-    count=$(wc -l Dir-subdomains/subdomains.txt | cut -d " " -f1)
-    printf "${Yellow}[+] All subdomains found : %s\n${NC}" $count
+    # mv Dir-subdomains/live-subdomains.txt Dir-subdomains/subdomains-with-ip.txt
+    # cat Dir-subdomains/subdomains-with-ip.txt | cut -d " " -f1 | sed "s/\.$//" | sort -u | tee Dir-subdomains/subdomains.txt
+    # count=$(wc -l Dir-subdomains/subdomains.txt | cut -d " " -f1)
+    # printf "${Yellow}[+] All subdomains found : %s\n${NC}" $count
     # rm Dir-subdomains/altered-live-subdomains.txt
     # rm Dir-subdomains/probable-subdomains.txt Configs/reliable-resolvers.txt
     # cat Dir-subdomains/subdomains.txt | httprobe | sort -u | tee Dir-subdomains/webdomains.txt
     # fetch_subdomains_and_find_secrets_through_meg
-    get_CNAME
-    # do_port_scan
+    # get_CNAME
+    do_port_scan
     # do_dir_bruteforcing
     # do_nuclei_scan
     # extract_wayback_gau_urls

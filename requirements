@@ -8,4 +8,5 @@ massdns: git clone https://github.com/blechschmidt/massdns.git;cd massdns;make;s
 altdns: python2 -m pip install py-altdns
 anew: go get -u github.com/tomnomnom/anew
 shuffledns: GO111MODULE=on go get -v github.com/projectdiscovery/shuffledns/cmd/shuffledns
+httpx: GO111MODULE=on go get -v github.com/projectdiscovery/httpx/cmd/httpx
 
