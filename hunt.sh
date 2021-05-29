@@ -81,6 +81,8 @@ On_IWhite='\033[0;107m'   # White
 # working_dir=$(pwd)
 # echo $working_dir
 
+if [ ! -d $HOME/Hunt-script-tools ];then mkdir $HOME/Hunt-script-tools;fi
+
 if [ ! -d Configs ];then mkdir Configs;fi
 if [ ! -d Dir-subdomains ];then mkdir Dir-subdomains;fi
 if [[ -f "./Configs/resolvers.txt" ]]
@@ -380,15 +382,17 @@ do_port_scan(){
     echo -e "\n${Green}[+] **************************************All Port and Services Scanned**********************************${NC}"
 }
 do_dir_bruteforcing(){
-    echo -e "\n${Red}[+] **************************************Directory Brute Forcing Started*********************************${NC}"
-    mkdir Directories
-    mkdir Dir-Bf
-    wget https://raw.githubusercontent.com/dark-warlord14/ffufplus/master/wordlist/dicc.txt
-    xargs -P10 -I {} sh -c 'url="{}"; ffuf -r -c -H "Accept: */*" -H "X-Forwarded-For: 127.0.0.1" -H "User-Agent: Mozilla/5.0 (X11; Linux x86_64; rv:72.0) Gecko/20100101 Firefox/72.0" -u "{}/FUZZ" -w dicc.txt -t 80 -D -e js,php,bak,txt,asp,aspx,jsp,html,zip,jar,sql,json,old,gz,shtml,log,swp,yaml,yml,config,save,rsa,ppk -ac -se -o Directories/${url##*/}-${url%%:*}.json' < webdomains.txt
+    echo -e "\n${Blue}[+] **************************************Directory Brute Forcing Started*********************************${NC}"
+    if [ -d Dir-bf ];then rm -rf Dir-bf;fi
+    mkdir Dir-bf
+    if [ ! -f Dir-bf/dicc.txt ];then
+        wget https://raw.githubusercontent.com/maurosoria/dirsearch/master/db/dicc.txt -O Dir-bf/dicc.txt
+    else
+        printf "dicc exists"
+    fi
+    xargs -P10 -I {} sh -c 'url="{}"; ffuf -r -c -H "Accept: */*" -H "X-Forwarded-For: 127.0.0.1" -H "User-Agent: Mozilla/5.0 (X11; Linux x86_64; rv:72.0) Gecko/20100101 Firefox/72.0" -u "{}/FUZZ" -w Dir-bf/dicc.txt -t 80 -D -e js,php,bak,txt,asp,aspx,jsp,html,zip,jar,sql,json,old,gz,shtml,log,swp,yaml,yml,config,save,rsa,ppk -ac -se -o Dir-bf/${url##*/}-${url%%:*}.json' < Dir-subdomains/webdomains.txt
     #Extract data in nice format from json files given by ffuff
-    cat Directories/* | jq '[.results[]|{status: .status, length: .length, url: .url}]' | grep -Po "status\":\s(\d{3})|length\":\s(\d{1,7})|url\":\s\"(http[s]?:\/\/.*?)\"" | paste -d' ' - - - | awk '{print $2" "$4" "$6}' | sed 's/\"//g' > Dir-Bf/directories-bf.txt
-    mv dicc.txt Dir-Bf/
-    rm -rf Directories/
+    cat Dir-bf/* | jq '[.results[]|{status: .status, length: .length, url: .url}]' | grep -Po "status\":\s(\d{3})|length\":\s(\d{1,7})|url\":\s\"(http[s]?:\/\/.*?)\"" | paste -d' ' - - - | sed 's/\"//g' > Dir-bf/all-subdomains-directories-bf.txt
     echo -e "\n${Red}[+] **************************************Directory Brute Forcing Completed*********************************${NC}"
 }
 
@@ -399,35 +403,43 @@ take_screenshots(){
     echo -e "\n${Red}[+] **************************************Finished Screenshotting**************************************************${NC}"
 }
 do_nuclei_scan(){
-    echo -e "\n${Red}[+] **************************************Starting Nuclei Scans****************************************************${NC}"
-    mkdir Nuclei-scans
-    cat webdomains.txt | nuclei -c 200 -silent -t ~/nuclei-templates/ -o Nuclei-scans/nuclei-results.txt
+    echo -e "\n${Blue}[+] **************************************Starting Nuclei Scans****************************************************${NC}"
+    if [ -d Dir-nuclei-scan ];then rm -rf Dir-nuclei-scan;fi
+    mkdir Dir-nuclei-scan
+    cat Dir-subdomains/webdomains.txt | nuclei -c 200 -silent -t ~/nuclei-templates/ -o Dir-nuclei-scan/nuclei-results.txt
     echo -e "\n${Red}[+] **************************************Finished Nuclei Scans****************************************************${NC}"
 }
 extract_wayback_gau_urls(){
-    echo -e "\n${Red}[+] **************************************Extracting Wayback and Gau URLS******************************************${NC}"
-	mkdir Archive
-    waybackurls $domain | tee -a Archive/wb-gau-urls.tmp;gau $domain | tee -a Archive/wb-gau-urls.tmp;cat Archive/wb-gau-urls.tmp | sort -u > Archive/wb-gau-urls.txt;
-    rm Archive/wb-gau-urls.tmp
-	cat Archive/wb-gau-urls.txt  | sort -u | grep -P "\w+\.js(\?|$)" | httpx -silent -status-code -mc 200 | awk '{print $1}' | sort -u > Archive/jsurls.txt
+    echo -e "\n${Blue}[+] **************************************Extracting Wayback and Gau URLS******************************************${NC}"
+	if [ -d Dir-archive ];then rm -rf Dir-archive;fi
+    mkdir Dir-archive
+    printf "${Yellow}[+] Using waybackurl\n${NC}"
+    waybackurls $domain | tee -a Dir-archive/wb-gau-urls.tmp;
+    printf "${Yellow}[+] Using gau\n${NC}"
+    gau $domain | tee -a Dir-archive/wb-gau-urls.tmp
+    cat Dir-archive/wb-gau-urls.tmp | sort -u > Dir-archive/wb-gau-urls.txt
+    rm Dir-archive/wb-gau-urls.tmp
+    printf "${Yellow}[+] Extracting js files from archive\n${NC}"
+	cat Dir-archive/wb-gau-urls.txt  | sort -u | grep -P "\w+\.js(\?|$)" | httpx -silent -status-code -mc 200 | awk '{print $1}' | sort -u > Dir-archive/jsurls.txt
 	# Fetch Endpoints
-	echo -e "[$Green+$NC] Fetching Endpoints from gau JS files"
-	if [[ ! -f "$HOME/tools/LinkFinder/linkfinder.py" ]];
+	# echo -e "[$Green+$NC] Fetching Endpoints from gau JS files"
+    printf "${Yellow}[+] Fetching Endpoints from archived JS files${NC}"
+	if [[ ! -f "$HOME/Hunt-script-tools/LinkFinder/linkfinder.py" ]];
 	then
 		git clone https://github.com/GerbenJavado/LinkFinder.git $HOME/tools/LinkFinder
 		apt install -y jsbeautifier
 	fi
-	for js in `cat Archive/jsurls.txt`;
+	for js in `cat Dir-archive/jsurls.txt`;
 	do
-		python3 $HOME/tools/LinkFinder/linkfinder.py -i $js -o cli | anew Archive/endpoints.txt;
+		python3 $HOME/tools/LinkFinder/linkfinder.py -i $js -o cli | anew Dir-archive/js-extracted-endpoints.txt;
 	done
-    echo -e "\n${Red}[+] **************************************Finished Extracting Wayback and Gau URLS*********************************${NC}"
+    echo -e "\n${Green}[+] **************************************Finished Extracting Wayback and Gau URLS*********************************${NC}"
 }
 do_paramining(){
     echo -e "\n${Red}[+] **************************************Starting Paramining******************************************************${NC}"
-	cat Archive/wb-gau-urls.txt  | sort -u | unfurl --unique keys > Archive/paramlist.txt
+	cat Dir-archive/wb-gau-urls.txt  | sort -u | unfurl --unique keys > Dir-archive/paramlist.txt
     mkdir Paramined
-    grep ? Archive/wb-gau-urls.txt > Paramined/urls-with-parameters
+    grep ? Dir-archive/wb-gau-urls.txt > Paramined/urls-with-parameters
     # This is added to find out unique URLs among URLs which differ just in value of the parameter.
     cat Paramined/urls-with-parameters | unfurl -u format %d%p | xargs -n1 -I {} erep -m1 {} Paramined/urls-with-parameters | tee Paramined/unique-urls-with-parameters.tmp | grep -vE 'jpg|jpeg|gif|css|tif|tiff|png|ttf|woff|woff2|ico|pdf|svg|txt|eot|js' | tee Paramined/unique-urls-with-parameters
     cd ~/tools/Arjun/
@@ -439,15 +451,15 @@ do_paramining(){
 }
 
 extract_using_gf(){
-    mkdir Gf-extracted
-    gf xss Archive/wb-gau-urls.txt | cut -d : -f3- | sort -u > Gf-extracted/$domain"_xss"
-    gf ssti Archive/wb-gau-urls.txt | sort -u > Gf-extracted/$domain"_ssti"
-    gf ssrf Archive/wb-gau-urls.txt | sort -u > Gf-extracted/$domain"_ssrf"
-    gf sqli Archive/wb-gau-urls.txt | sort -u > Gf-extracted/$domain"_sqli"
-    gf redirect  Archive/wb-gau-urls.txt  | cut -d : -f2- | sort -u > Gf-extracted/$domain"_redirect"
-    gf rce  Archive/wb-gau-urls.txt | sort -u > Gf-extracted/$domain"_rce"
-    gf potential Archive/wb-gau-urls.txt | cut -d : -f3- | sort -u > Gf-extracted/$domain"_potential"
-    gf lfi  Archive/wb-gau-urls.txt | sort -u > Gf-extracted/$domain"_lfi"
+    mkdir Dir-gf-extracted
+    gf xss Dir-archive/wb-gau-urls.txt | cut -d : -f3- | sort -u > Dir-gf-extracted/$domain"_xss"
+    gf ssti Dir-archive/wb-gau-urls.txt | sort -u > Dir-gf-extracted/$domain"_ssti"
+    gf ssrf Dir-archive/wb-gau-urls.txt | sort -u > Dir-gf-extracted/$domain"_ssrf"
+    gf sqli Dir-archive/wb-gau-urls.txt | sort -u > Dir-gf-extracted/$domain"_sqli"
+    gf redirect  Dir-archive/wb-gau-urls.txt  | cut -d : -f2- | sort -u > Dir-gf-extracted/$domain"_redirect"
+    gf rce  Dir-archive/wb-gau-urls.txt | sort -u > Dir-gf-extracted/$domain"_rce"
+    gf potential Dir-archive/wb-gau-urls.txt | cut -d : -f3- | sort -u > Dir-gf-extracted/$domain"_potential"
+    gf lfi  Dir-archive/wb-gau-urls.txt | sort -u > Dir-gf-extracted/$domain"_lfi"
 }
 fetch_subdomains_and_find_secrets_through_meg(){
     echo -e "\n${Red}[+] **************************************Using Meg to fetch from Subdomains******************************************************${NC}"
@@ -456,15 +468,15 @@ fetch_subdomains_and_find_secrets_through_meg(){
 		git clone https://github.com/dwisiswant0/gf-secrets $HOME/tools/gf-secrets
 		cp "$HOME"/tools/gf-secrets/.gf/*.json ~/.gf
 	fi
-	meg -d 1000 -v / webdomains.txt
+	meg -d 1000 -v / Dir-subdomains/webdomains.txt
 	mv out meg
-	for i in `gf -list`; do [[ ${i} =~ "_secrets"* ]] && gf ${i} >> Gf-extracted/"${i}".txt; done
+	for i in `gf -list`; do [[ ${i} =~ "_secrets"* ]] && gf ${i} >> Dir-gf-extracted/"${i}".txt; done
     echo -e "\n${Red}[+] **************************************Finished using Meg to fetch from Subdomains******************************************************${NC}"
 }
 
 do_spidering(){
     echo -e "\n${Red}[+] **************************************Starting GoSpider******************************************************${NC}"
-    gospider -S webdomains.txt -o Gospider -c 10 -t 5 -d 5 --other-source
+    gospider -S Dir-subdomains/webdomains.txt -o Gospider -c 10 -t 5 -d 5 --other-source
     cat Gospider/* > Gospider/all-gospider.txt
     echo -e "\n${Red}[+] **************************************Finished GoSpider******************************************************${NC}"
 }
@@ -492,14 +504,21 @@ single_domain(){
     # printf "${Yellow}[+] All subdomains found : %s\n${NC}" $count
     # rm Dir-subdomains/altered-live-subdomains.txt
     # rm Dir-subdomains/probable-subdomains.txt Configs/reliable-resolvers.txt
-    # cat Dir-subdomains/subdomains.txt | httprobe | sort -u | tee Dir-subdomains/webdomains.txt
+    # if [ -f Dir-subdomains/webdomains.txt];then rm Dir-subdomains/webdomains.txt;fi
+    # # if [ -f Dir-subdomains/webdomains.txt.1];then rm Dir-subdomains/webdomains.txt.1;fi
+    # printf "${Yellow}[+] Finding webdomains from all found subdomains\n${NC}"
+    # printf ${Green}
+    # cat Dir-subdomains/subdomains.txt | httprobe | tee Dir-subdomains/webdomains.txt.1
+    # printf ${NC}
+    # cat Dir-subdomains/webdomains.txt.1 | sort -u | tee Dir-subdomains/webdomains.txt
+    # rm Dir-subdomains/webdomains.txt.1
     # fetch_subdomains_and_find_secrets_through_meg
     # get_CNAME
-    do_port_scan
+    # do_port_scan
     # do_dir_bruteforcing
     # do_nuclei_scan
-    # extract_wayback_gau_urls
-    # extract_using_gf
+    extract_wayback_gau_urls
+    extract_using_gf
     # take_screenshots
     # do_spidering
     # if [[ -z $2 ]];then
