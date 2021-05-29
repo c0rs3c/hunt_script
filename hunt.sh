@@ -427,7 +427,7 @@ extract_wayback_gau_urls(){
 	if [[ ! -f "$HOME/Hunt-script-tools/LinkFinder/linkfinder.py" ]];
 	then
 		git clone https://github.com/GerbenJavado/LinkFinder.git $HOME/tools/LinkFinder
-		apt install -y jsbeautifier
+		# apt install -y jsbeautifier
 	fi
 	for js in `cat Dir-archive/jsurls.txt`;
 	do
@@ -450,28 +450,55 @@ do_paramining(){
 
 }
 
-extract_using_gf(){
-    mkdir Dir-gf-extracted
-    gf xss Dir-archive/wb-gau-urls.txt | cut -d : -f3- | sort -u > Dir-gf-extracted/$domain"_xss"
-    gf ssti Dir-archive/wb-gau-urls.txt | sort -u > Dir-gf-extracted/$domain"_ssti"
-    gf ssrf Dir-archive/wb-gau-urls.txt | sort -u > Dir-gf-extracted/$domain"_ssrf"
-    gf sqli Dir-archive/wb-gau-urls.txt | sort -u > Dir-gf-extracted/$domain"_sqli"
-    gf redirect  Dir-archive/wb-gau-urls.txt  | cut -d : -f2- | sort -u > Dir-gf-extracted/$domain"_redirect"
-    gf rce  Dir-archive/wb-gau-urls.txt | sort -u > Dir-gf-extracted/$domain"_rce"
-    gf potential Dir-archive/wb-gau-urls.txt | cut -d : -f3- | sort -u > Dir-gf-extracted/$domain"_potential"
-    gf lfi  Dir-archive/wb-gau-urls.txt | sort -u > Dir-gf-extracted/$domain"_lfi"
+extract_common_vuln_using_gf(){
+
+    if [ $(gf -list | wc -l) -eq 0 ];then
+        printf "${Red}[-] No gf pattern exists\n${NC}"
+    else
+        count=$(gf -list | wc -l)
+        printf "${Green}[+] Total number of gf patterns present: %s\n${NC}" $count
+        if [[ $(gf xss Dir-archive/wb-gau-urls.txt | wc -l | cut -d " " -f1) -ne 0 ]];then
+            gf xss Dir-archive/wb-gau-urls.txt | cut -d : -f3- | sort -u > Dir-gf-extracted/$domain"_xss";fi
+        if [[ $(gf ssti Dir-archive/wb-gau-urls.txt | wc -l | cut -d " " -f1) -ne 0 ]];then
+            gf ssti Dir-archive/wb-gau-urls.txt | sort -u > Dir-gf-extracted/$domain"_ssti";fi
+        if [[ $(gf ssrf Dir-archive/wb-gau-urls.txt | wc -l | cut -d " " -f1) -ne 0 ]];then
+            gf ssrf Dir-archive/wb-gau-urls.txt | sort -u > Dir-gf-extracted/$domain"_ssrf";fi
+        if [[ $(gf sqli Dir-archive/wb-gau-urls.txt | wc -l | cut -d " " -f1) -ne 0 ]];then
+            gf sqli Dir-archive/wb-gau-urls.txt | sort -u > Dir-gf-extracted/$domain"_sqli";fi
+        if [[ $(gf redirect  Dir-archive/wb-gau-urls.txt | wc -l | cut -d " " -f1) -ne 0 ]];then
+            gf redirect  Dir-archive/wb-gau-urls.txt  | cut -d : -f2- | sort -u > Dir-gf-extracted/$domain"_redirect";fi
+        if [[ $(gf rce Dir-archive/wb-gau-urls.txt | wc -l | cut -d " " -f1) -ne 0 ]];then
+            gf rce Dir-archive/wb-gau-urls.txt | sort -u > Dir-gf-extracted/$domain"_rce";fi
+        if [[ $(gf potential Dir-archive/wb-gau-urls.txt | wc -l | cut -d " " -f1) -ne 0 ]];then
+            gf potential Dir-archive/wb-gau-urls.txt | cut -d : -f3- | sort -u > Dir-gf-extracted/$domain"_potential";fi
+        if [[ $(gf lfi  Dir-archive/wb-gau-urls.txt | wc -l | cut -d " " -f1) -ne 0 ]];then
+            gf lfi  Dir-archive/wb-gau-urls.txt | sort -u > Dir-gf-extracted/$domain"_lfi";fi
+    fi
 }
+
 fetch_subdomains_and_find_secrets_through_meg(){
-    echo -e "\n${Red}[+] **************************************Using Meg to fetch from Subdomains******************************************************${NC}"
-	if [[ ! -d "$HOME/tools/gf-secrets" ]]
+    if [ -d Dir-meg ];then rm -rf Dir-meg;fi
+    echo -e "\n${Blue}[+] **************************************Using Meg to fetch from Subdomains******************************************************${NC}"
+	if [[ ! -d "$HOME/Hunt-script-tools/gf-secrets" ]]
 	then
-		git clone https://github.com/dwisiswant0/gf-secrets $HOME/tools/gf-secrets
-		cp "$HOME"/tools/gf-secrets/.gf/*.json ~/.gf
+		git clone https://github.com/dwisiswant0/gf-secrets $HOME/Hunt-script-tools/gf-secrets
+		sudo cp "$HOME"/Hunt-script-tools/gf-secrets/.gf/*.json ~/.gf
+        printf "${Yellow}New gf patterns added\n${NC}"
+    else
+        printf "${Yellow}Extra gf patterns exists\n${NC}"
 	fi
 	meg -d 1000 -v / Dir-subdomains/webdomains.txt
-	mv out meg
-	for i in `gf -list`; do [[ ${i} =~ "_secrets"* ]] && gf ${i} >> Dir-gf-extracted/"${i}".txt; done
-    echo -e "\n${Red}[+] **************************************Finished using Meg to fetch from Subdomains******************************************************${NC}"
+	mv out Dir-meg
+	for i in `gf -list`; do
+        if [[ ${i} =~ "_secrets"* ]];then
+            gf ${i} Dir-meg > tmp
+            if [[ $(wc -l tmp | cut -d " " -f1) -ne 0 ]];then
+                cat tmp > Dir-gf-extracted/${i}.txt
+            fi
+            rm tmp
+        fi
+    done
+    echo -e "\n${Green}[+] **************************************Finished using Meg to fetch from Subdomains******************************************************${NC}"
 }
 
 do_spidering(){
@@ -512,14 +539,16 @@ single_domain(){
     # printf ${NC}
     # cat Dir-subdomains/webdomains.txt.1 | sort -u | tee Dir-subdomains/webdomains.txt
     # rm Dir-subdomains/webdomains.txt.1
-    # fetch_subdomains_and_find_secrets_through_meg
     # get_CNAME
     # do_port_scan
     # do_dir_bruteforcing
     # do_nuclei_scan
-    extract_wayback_gau_urls
-    extract_using_gf
-    # take_screenshots
+    # extract_wayback_gau_urls
+    # if [ -d Dir-gf-extracted ];then rm -rf Dir-gf-extracted;fi
+    # mkdir Dir-gf-extracted
+    # fetch_subdomains_and_find_secrets_through_meg
+    # extract_common_vuln_using_gf
+    take_screenshots
     # do_spidering
     # if [[ -z $2 ]];then
     #     hunt_for_xss
@@ -560,7 +589,7 @@ multiple_domain(){
         # do_dir_bruteforcing
         # do_nuclei_scan
         # extract_wayback_gau_urls
-        # extract_using_gf
+        # extract_common_vuln_using_gf
         # take_screenshots
         # do_spidering
         # if [[ -z $2 ]];then

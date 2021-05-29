@@ -12,4 +12,9 @@ httpx: GO111MODULE=on go get -v github.com/projectdiscovery/httpx/cmd/httpx
 ffuf: go get -u github.com/ffuf/ffuf
 httprobe: go get -u github.com/tomnomnom/httprobe
 nuclei: GO111MODULE=on go get -v github.com/projectdiscovery/nuclei/v2/cmd/nuclei;nuclei -update-templates
+gf : go get -u github.com/tomnomnom/gf;
+Further in ~/gf flder patterns need to be added and bash autocompletion must be set
+gau
+waybackurl
+linkfinder.py
 
