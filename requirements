@@ -1,20 +1,51 @@
 assetfinder : go get -u github.com/tomnomnom/assetfinder
-findomain : https://github.com/Findomain/Findomain/releases/download/4.3.0/findomain-linux;mv finddomain-linux finddomain;chmod +x finddoman;cp finddomain ~/.local/bin
+
+findomain : https://github.com/Findomain/Findomain/releases/download/4.3.0/findomain-linux;mv finddomain-linux
+
+finddomain;chmod +x finddoman;cp finddomain ~/.local/bin
+
 amass
+
 subfinder:GO111MODULE=on go get -v github.com/projectdiscovery/subfinder/v2/cmd/subfinder
+
 github-subdomains : go get -u github.com/gwen001/github-subdomains
+
 dnsvalidator: https://github.com/vortexau/dnsvalidator.git;cd dnsvalidator;sudo python3 setup.py install
+
 massdns: git clone https://github.com/blechschmidt/massdns.git;cd massdns;make;sudo cp bin/massdns /usr/bin
+
 altdns: python2 -m pip install py-altdns
+
 anew: go get -u github.com/tomnomnom/anew
+
 shuffledns: GO111MODULE=on go get -v github.com/projectdiscovery/shuffledns/cmd/shuffledns
+
 httpx: GO111MODULE=on go get -v github.com/projectdiscovery/httpx/cmd/httpx
+
 ffuf: go get -u github.com/ffuf/ffuf
+
 httprobe: go get -u github.com/tomnomnom/httprobe
+
 nuclei: GO111MODULE=on go get -v github.com/projectdiscovery/nuclei/v2/cmd/nuclei;nuclei -update-templates
+
 gf : go get -u github.com/tomnomnom/gf;
-Further in ~/gf flder patterns need to be added and bash autocompletion must be set
-gau
-waybackurl
+Further in ~/gf flder patterns need to be added and bash autocompletion must be set. These setting up messages may be generated.
+
+gau : GO111MODULE=on go get -u -v github.com/lc/gau
+
+waybackurls : go get github.com/tomnomnom/waybackurls
+
 linkfinder.py
 
+meg : go get -u github.com/tomnomnom/meg
+
+aquatone : wget https://github.com/michenriksen/aquatone/releases/download/v1.7.0/aquatone_linux_amd64_1.7.0.zip -O $HOME/Hunt-script-tools/aquatone.zip;unzip $HOME/Hunt-script-tools/aquatone.zip -d $HOME/Hunt-script-tools;sudo mv $HOME/Hunt-script-tools/aquatone /usr/bin/;rm $HOME/Hunt-script-tools/README.md;rm $HOME/Hunt-script-tools/LICENSE.txt
+It requires chromium as well : sudo apt install chromium
+
+gospider: go get -u github.com/jaeles-project/gospider
+
+unfurl: go get -u github.com/tomnomnom/unfurl
+
+qsreplace: go get -u github.com/tomnomnom/qsreplace
+
+arjun : pip3 install arjun

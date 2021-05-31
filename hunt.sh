@@ -393,14 +393,17 @@ do_dir_bruteforcing(){
     xargs -P10 -I {} sh -c 'url="{}"; ffuf -r -c -H "Accept: */*" -H "X-Forwarded-For: 127.0.0.1" -H "User-Agent: Mozilla/5.0 (X11; Linux x86_64; rv:72.0) Gecko/20100101 Firefox/72.0" -u "{}/FUZZ" -w Dir-bf/dicc.txt -t 80 -D -e js,php,bak,txt,asp,aspx,jsp,html,zip,jar,sql,json,old,gz,shtml,log,swp,yaml,yml,config,save,rsa,ppk -ac -se -o Dir-bf/${url##*/}-${url%%:*}.json' < Dir-subdomains/webdomains.txt
     #Extract data in nice format from json files given by ffuff
     cat Dir-bf/* | jq '[.results[]|{status: .status, length: .length, url: .url}]' | grep -Po "status\":\s(\d{3})|length\":\s(\d{1,7})|url\":\s\"(http[s]?:\/\/.*?)\"" | paste -d' ' - - - | sed 's/\"//g' > Dir-bf/all-subdomains-directories-bf.txt
-    echo -e "\n${Red}[+] **************************************Directory Brute Forcing Completed*********************************${NC}"
+    echo -e "\n${Green}[+] **************************************Directory Brute Forcing Completed*********************************${NC}"
 }
 
 take_screenshots(){
-    echo -e "\n${Red}[+] **************************************Starting Screenshotting**************************************************${NC}"
-    mkdir Screenshots
-    cat webdomains.txt | aquatone -out Screenshots
-    echo -e "\n${Red}[+] **************************************Finished Screenshotting**************************************************${NC}"
+    echo -e "\n${Blue}[+] **************************************Starting Screenshotting**************************************************${NC}"
+    if [ -d Dir-screenshots ];then rm -rf Dir-screenshots;fi
+    mkdir Dir-screenshots
+    cat Dir-subdomains/webdomains.txt Dir-port-scans/all-ips.txt > webdomains_and_ip.txt
+    cat webdomains_and_ip.txt | aquatone -out Dir-screenshots
+    rm webdomains_and_ip.txt
+    echo -e "\n${Green}[+] **************************************Finished Screenshotting**************************************************${NC}"
 }
 do_nuclei_scan(){
     echo -e "\n${Blue}[+] **************************************Starting Nuclei Scans****************************************************${NC}"
@@ -426,7 +429,7 @@ extract_wayback_gau_urls(){
     printf "${Yellow}[+] Fetching Endpoints from archived JS files${NC}"
 	if [[ ! -f "$HOME/Hunt-script-tools/LinkFinder/linkfinder.py" ]];
 	then
-		git clone https://github.com/GerbenJavado/LinkFinder.git $HOME/tools/LinkFinder
+		git clone https://github.com/GerbenJavado/LinkFinder.git $HOME/Hunt-script-tools/LinkFinder
 		# apt install -y jsbeautifier
 	fi
 	for js in `cat Dir-archive/jsurls.txt`;
@@ -436,17 +439,16 @@ extract_wayback_gau_urls(){
     echo -e "\n${Green}[+] **************************************Finished Extracting Wayback and Gau URLS*********************************${NC}"
 }
 do_paramining(){
-    echo -e "\n${Red}[+] **************************************Starting Paramining******************************************************${NC}"
-	cat Dir-archive/wb-gau-urls.txt  | sort -u | unfurl --unique keys > Dir-archive/paramlist.txt
-    mkdir Paramined
-    grep ? Dir-archive/wb-gau-urls.txt > Paramined/urls-with-parameters
+    echo -e "\n${Blue}[+] **************************************Starting Paramining******************************************************${NC}"
+    if [ -d Dir-paramined ];then rm -rf Dir-paramined;fi
+    mkdir Dir-paramined
+	# cat Dir-archive/wb-gau-urls.txt  | sort -u | unfurl --unique keys > Dir-paramined/paramlist.txt
+    #Finding url endpoints  with parameters and then to be used in arjun
+    cat Dir-archive/wb-gau-urls.txt | grep ? | grep -vE 'jpg|jpeg|gif|css|tif|tiff|png|ttf|woff|woff2|ico|pdf|svg|txt|eot|js' | unfurl -u format %s://%d%p > Dir-paramined/urls-with-parameters
     # This is added to find out unique URLs among URLs which differ just in value of the parameter.
-    cat Paramined/urls-with-parameters | unfurl -u format %d%p | xargs -n1 -I {} erep -m1 {} Paramined/urls-with-parameters | tee Paramined/unique-urls-with-parameters.tmp | grep -vE 'jpg|jpeg|gif|css|tif|tiff|png|ttf|woff|woff2|ico|pdf|svg|txt|eot|js' | tee Paramined/unique-urls-with-parameters
-    cd ~/tools/Arjun/
-    python3 arjun.py --urls $working_dir/Paramined/unique-urls-with-parameters -t 50 -o $working_dir/Paramined/arjun-output.txt
-    rm $working_dir/Paramined/unique-urls-with-parameters.tmp
-    cd $working_dir
-    echo -e "\n${Red}[+] **************************************Finished Paramining******************************************************${NC}"
+    # cat Dir-paramined/urls-with-parameters | unfurl -u format %d%p | xargs -n1 -I {} erep -m1 {} Dir-paramined/urls-with-parameters | tee Dir-paramined/unique-urls-with-parameters.tmp | grep -vE 'jpg|jpeg|gif|css|tif|tiff|png|ttf|woff|woff2|ico|pdf|svg|txt|eot|js' | tee Dir-paramined/unique-urls-with-parameters
+    arjun -i Dir-paramined/urls-with-parameters -t 50 -oT Dir-paramined/arjun-output.txt
+    echo -e "\n${Green}[+] **************************************Finished Paramining******************************************************${NC}"
 
 }
 
@@ -502,15 +504,24 @@ fetch_subdomains_and_find_secrets_through_meg(){
 }
 
 do_spidering(){
-    echo -e "\n${Red}[+] **************************************Starting GoSpider******************************************************${NC}"
-    gospider -S Dir-subdomains/webdomains.txt -o Gospider -c 10 -t 5 -d 5 --other-source
-    cat Gospider/* > Gospider/all-gospider.txt
-    echo -e "\n${Red}[+] **************************************Finished GoSpider******************************************************${NC}"
+    echo -e "\n${Blue}[+] **************************************Starting GoSpider******************************************************${NC}"
+    gospider -S Dir-subdomains/webdomains.txt -o Dir-gospider -c 10 -t 5 -d 5 --other-source --blacklist ".(jpg|jpeg|gif|css|tif|tiff|png|ttf|woff|woff2|ico|pdf|svg|txt)"
+    cat Dir-gospider/* > Dir-gospider/all-gospider.txt
+    echo -e "\n${Green}[+] **************************************Finished GoSpider******************************************************${NC}"
 }
 hunt_for_xss(){
-    echo -e "\n${Red}[+] **************************************Starting XSS Hunting******************************************************${NC}"
-    cat all-gospider.txt |  grep -e "code-200" |  awk '{print $5}'| grep "=" | qsreplace -a | grep -f in-scope-regex
-    echo -e "\n${Red}[+] **************************************Finished XSS Hunting******************************************************${NC}"
+    echo -e "\n${Blue}[+] **************************************Starting XSS Hunting******************************************************${NC}"
+    printf "${Yellow}[+] Hunting for XSS on host\n${NC}"
+    cat Dir-gospider/all-gospider.txt |  grep -e "code-200" |  awk '{print $5}'| grep "=" | qsreplace -a | dalfox pipe -o probable-xss-on-host.txt
+    # cat Dir-gospider/all-gospider.txt |  grep -e "code-200" |  awk '{print $5}'| grep "=" | qsreplace -a | grep -f in-scope-regex
+    printf "${Yellow}Hunting for XSS on waybackurls\n${NC}"
+    cat Dir-archive/wb-gau-urls.txt | gf xss | sed ‘s/=.*/=/’ | sed ‘s/URL: //’ | tee wb-testxss.txt
+    if [[ $(wc -l wb-testxss.txt | cut -d " " -f1) -ne 0 ]];then
+        printf "${Yellow}[+] Hunting for XSS on waybackurls\n${NC}"
+        dalfox file wb-testxss.txt -o probable-xss-on-waybackurls
+        rm wb-testxss.txt
+    fi
+    echo -e "\n${Green}[+] **************************************Finished XSS Hunting******************************************************${NC}"
 }
 # while getopts ":d:D:r" opt; do
 single_domain(){
@@ -548,12 +559,13 @@ single_domain(){
     # mkdir Dir-gf-extracted
     # fetch_subdomains_and_find_secrets_through_meg
     # extract_common_vuln_using_gf
-    take_screenshots
+    # take_screenshots
     # do_spidering
+    # hunt_for_xss
     # if [[ -z $2 ]];then
     #     hunt_for_xss
     # fi
-    # do_paramining
+    do_paramining
 }
 multiple_domain(){
     printf "${Purple}Multiple Domain Called\n{$NC}"
